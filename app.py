@@ -210,7 +210,7 @@ if st.session_state.app_mode == "select":
     n_val = st.number_input(
         "輸入大小 n:",
         min_value=1,
-        max_value=15,
+        max_value=12,
         value=3,
         step=1,
         key="sel_n",
