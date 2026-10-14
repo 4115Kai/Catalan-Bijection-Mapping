@@ -39,4 +39,16 @@ bijec_info = {
             f"在凸多邊形的三角剖分中,若沿著對偶圖的結構向左側的子三角形前進,則在弧線圖中的對應序列中標上該弧線的起點;反之,若向右側之三角形前進,則標上該弧線的終點。若用顏色做對應,在凸多邊形三角剖分中一組顏色只會有兩條線(左線跟右線),對應到弧線圖的起點跟終點。",
     frozenset({"Non-crossing Arc Diagram","Stack Permutation"}):
             f"弧線圖半圓的起點(空心點)對應堆疊排列的放入(push),半圓的終點(實心點)對應堆疊排列的拿出(pop),若用顏色對應,在堆疊排列中,相同顏色之球與弧線及為彼此對應。",
+    frozenset({"Non-crossing Partition","Non-intersecting Chord"}):
+            f"在圓中不相交弦中,第n條弦之起點可對應至不交叉分割中的第n頂點,並且圓周點上數字可視作步驟數,若不同弦之終點為連續數字,則對應之頂點會被分割至同一部分。",
+    frozenset({"Non-crossing Partition","Polygon Triangulation"}):
+            f"在三角剖分圖以向三角形左邊前進為主,若b三角形在a三角形之左邊,則不交叉分割圖中a、b頂點會被分在同一組;以此類推,直至n個三角形都確認完成。",
+    frozenset({"Non-crossing Partition","Stack Permutation"}):
+            f"在堆疊排列圖中,將第n球之放入(push)可視作不交叉分割中第n頂點,若在堆疊排列圖中球是被連續取出(及過程中無放入任何球),球之號碼所對應到的頂點即被分割在同一部分。",
+    frozenset({"Non-intersecting Chord","Polygon Triangulation"}):
+            f"在凸多邊形的三角剖分中，,若沿著對偶圖的結構向左側之三角形前進,則在圓中不相交弦中標上該弦的起點;反之,若向右側之三角形前進,則標上該弦的終點,且在兩圖中，顏色相同之弦與三角形即為彼此對應。",
+    frozenset({"Non-intersecting Chord","Stack Permutation"}):
+            f"在圓中不相交弦中,弦的起點(實心點)對應到堆疊排列的放入(push)；反之，弦的終點(空心點)對應到堆疊排列的放入(push) ,且在兩圖中，顏色相同之弦與球即為彼此對應。",
+    frozenset({"Polygon Triangulation","Stack Permutation"}):
+            f"在圖多邊形三角剖分圖中,以向左前進為主,直至左邊已無三角形,此時會回到上一個三角形,以此類推至全部三角形之左右皆已確認過。且向左前進時可視為在堆疊排量中放入一球,第n個經過之三角形及視為第n球;回到上一個三角形則視為取出一球。",
 }
