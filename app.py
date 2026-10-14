@@ -264,7 +264,7 @@ elif st.session_state.app_mode == "view":
       # 1. 顯示雙射對應原理（若 state.py 有定義 bijection_info 則讀取，無則不報錯）
       st.markdown(f"{struct_a} ↔ {struct_b} 對應原理")
       bij_dict = getattr(state, "bijec_info", {})
-      bij_text = bij_dict.get((struct_a, struct_b)) or bij_dict.get(
+      bij_text = bij_dict.get((struct_b, struct_a)) or bij_dict.get(
           (struct_a, struct_b)
       )
       if bij_text:
