@@ -260,7 +260,7 @@ elif st.session_state.app_mode == "view":
 
   # 右上角唯一的說明彈出按鈕
   with top_col3:
-    with st.popover("📖 說明與對應原理", use_container_width=True):
+    with st.popover("結構生成邏輯與對應原理", use_container_width=True):
       # 1. 顯示雙射對應原理（若 state.py 有定義 bijection_info 則讀取，無則不報錯）
       st.markdown(f"{struct_a} ↔ {struct_b} 對應原理")
       bij_dict = getattr(state, "bijection_info", {})
