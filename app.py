@@ -265,7 +265,7 @@ elif st.session_state.app_mode == "view":
       st.markdown(f"{struct_a} ↔ {struct_b} 對應原理")
       bij_dict = getattr(state, "bijec_info", {})
       bij_text = bij_dict.get((struct_a, struct_b)) or bij_dict.get(
-          (struct_b, struct_a)
+          (struct_a, struct_b)
       )
       if bij_text:
         st.markdown(bij_text)
