@@ -1,6 +1,7 @@
 import io
 import time
 import matplotlib.pyplot as plt
+import state  # 匯入文字資料庫
 import streamlit as st
 
 st.set_page_config(
@@ -12,9 +13,6 @@ st.set_page_config(
 # ==============================================================================
 # 1. Catalan 結構列表與 21 組雙射模組對照表 (PAIRS_MAP)
 # ==============================================================================
-# 格式：(結構 A, 結構 B): ("模組檔名", "類別名稱", "步數類型(n或2n)")
-# 💡 提示：輸入組合不分前後順序，自動比對。你與組員可以將 21 組全部填入此處！
-
 PAIRS_MAP = {
     ("Polygon Triangulation", "Dyck Path"): (
         "PathtoPoly2",
@@ -62,66 +60,66 @@ PAIRS_MAP = {
         "2n",
     ),
     ("Dyck Path", "Non-crossing Partition"): (
-            "ncp",
-            "NCP",
-            "2n",
+        "ncp",
+        "NCP",
+        "2n",
     ),
     ("Non-crossing Arc Diagram", "Stack Permutation"): (
-            "stack",
-            "Stack",
-            "2n",
+        "stack",
+        "Stack",
+        "2n",
     ),
     ("Non-crossing Partition", "Non-intersecting Chord"): (
-            "ChordtoNCP",
-            "CtoNCP",
-            "2n",
+        "ChordtoNCP",
+        "CtoNCP",
+        "2n",
     ),
     ("Polygon Triangulation", "Non-intersecting Chord"): (
-                "ChordtoPoly",
-                "CTP",
-                "2n",
+        "ChordtoPoly",
+        "CTP",
+        "2n",
     ),
     ("Stack Permutation", "Non-intersecting Chord"): (
-                    "ChordtoStack",
-                    "CTS",
-                    "2n",
+        "ChordtoStack",
+        "CTS",
+        "2n",
     ),
     ("Non-crossing Arc Diagram", "Non-crossing Partition"): (
-                        "ArctoNCP",
-                        "AtNCP",
-                        "2n",
-        ), 
+        "ArctoNCP",
+        "AtNCP",
+        "2n",
+    ),
     ("Polygon Triangulation", "Non-crossing Arc Diagram"): (
-                            "ArctoPoly",
-                            "ATP",
-                            "2n",
-            ), 
+        "ArctoPoly",
+        "ATP",
+        "2n",
+    ),
     ("Dyck Path", "Stack Permutation"): (
-                    "PathtoStack",
-                    "DTS",
-                    "2n",
-        ),
+        "PathtoStack",
+        "DTS",
+        "2n",
+    ),
     ("Non-crossing Partition", "Stack Permutation"): (
-                        "StacktoNCP",
-                        "STNCP",
-                        "2n",
-            ),
+        "StacktoNCP",
+        "STNCP",
+        "2n",
+    ),
     ("Binary Tree", "Non-intersecting Chord"): (
-                        "TreetoChord",
-                        "TTC",
-                        "2n",
-        ),
+        "TreetoChord",
+        "TTC",
+        "2n",
+    ),
     ("Binary Tree", "Non-crossing Partition"): (
-                            "TreetoNCP",
-                            "TTNCP",
-                            "2n",
-            ),
+        "TreetoNCP",
+        "TTNCP",
+        "2n",
+    ),
     ("Dyck Path", "Non-crossing Arc Diagram"): (
-                        "PathtoArc",
-                        "DTA",
-                        "2n",
-            ),
-  }
+        "PathtoArc",
+        "DTA",
+        "2n",
+    ),
+}
 
 # 提取所有可選的結構名稱列表
 ALL_STRUCTURES = sorted(
@@ -155,7 +153,9 @@ def find_mapping(struct_a, struct_b):
 # 2. Session State 狀態初始化
 # ==============================================================================
 if "app_mode" not in st.session_state:
-  st.session_state.app_mode = "select"  # 頁面模式：'select' (首頁) 或 'view' (圖表頁)
+  st.session_state.app_mode = (
+      "select"  # 頁面模式：'select' (首頁) 或 'view' (圖表頁)
+  )
 if "playing" not in st.session_state:
   st.session_state.playing = False
 if "step_idx" not in st.session_state:
@@ -164,9 +164,6 @@ if "page_idx" not in st.session_state:
   st.session_state.page_idx = 0
 
 
-# ==============================================================================
-# 3. 主頁面：結構選擇與參數設定頁 (app_mode == 'select')
-# ==============================================================================
 # ==============================================================================
 # 3. 主頁面：結構選擇與參數設定頁 (app_mode == 'select')
 # ==============================================================================
@@ -250,8 +247,8 @@ elif st.session_state.app_mode == "view":
   n_val = st.session_state.selected_n
   mod_name, class_name, step_type = st.session_state.current_mapping
 
-  # 頂部導覽列
-  top_col1, top_col2 = st.columns([3.5, 6.5])
+  # 頂部導覽列：左邊返回按鈕，中間標題，右邊單一說明按鈕
+  top_col1, top_col2, top_col3 = st.columns([2.5, 5, 2.5])
   with top_col1:
     if st.button("Back to home page"):
       st.session_state.app_mode = "select"
@@ -260,6 +257,32 @@ elif st.session_state.app_mode == "view":
 
   with top_col2:
     st.subheader(f"{struct_a} ↔ {struct_b} (n = {n_val})")
+
+  # 右上角唯一的說明彈出按鈕
+  with top_col3:
+    with st.popover("📖 說明與對應原理", use_container_width=True):
+      # 1. 顯示雙射對應原理（若 state.py 有定義 bijection_info 則讀取，無則不報錯）
+      st.markdown(f"{struct_a} ↔ {struct_b} 對應原理")
+      bij_dict = getattr(state, "bijection_info", {})
+      bij_text = bij_dict.get((struct_a, struct_b)) or bij_dict.get(
+          (struct_b, struct_a)
+      )
+      if bij_text:
+        st.markdown(bij_text)
+      else:
+        st.info("對應原理說明補充中...")
+
+      st.divider()
+
+      # 2. 顯示兩個結構的生成邏輯
+      st.markdown("結構生成邏輯")
+      st.markdown(f"**【{struct_a}】**")
+      st.markdown(state.structure_info.get(struct_a, "無說明文字"))
+
+      st.markdown("<br>", unsafe_allow_html=True)
+
+      st.markdown(f"**【{struct_b}】**")
+      st.markdown(state.structure_info.get(struct_b, "無說明文字"))
 
   try:
     # 動態載入類別
@@ -314,7 +337,7 @@ elif st.session_state.app_mode == "view":
     with ctrl_mid:
       st.caption("Step Control")
 
-      # 1. 利用左右留白 [1, 3, 1] 把按鈕集中在中間（比例可依需求調整，如 [1, 2, 1] 會更緊）
+      # 1. 利用左右留白 [0.5, 3, 0.5] 把按鈕集中在中間
       _, btn_box, _ = st.columns([0.5, 3, 0.5])
 
       with btn_box:

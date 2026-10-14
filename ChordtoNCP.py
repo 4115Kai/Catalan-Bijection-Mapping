@@ -1,17 +1,11 @@
-import logging
+
 import math
-import warnings
+
 import matplotlib.colors as mcolors
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 基礎警報封鎖
-warnings.filterwarnings(
-    'ignore', category=UserWarning, module='matplotlib'
-)
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-logging.getLogger('matplotlib').setLevel(logging.ERROR)
 
 
 
@@ -33,11 +27,16 @@ class CtoNCP:
         else max(0, min(step_index, self.max_steps))
     )
 
-    # 計算 直線拉直視圖 (Linear) 的基礎位置 (2n 個節點)
-    self.linear_x = np.arange(2 * self.n)
-    self.linear_y = np.zeros(2 * self.n)
+    # 計算 圓周不相交弦 (Chord) 的基礎位置 (2n 個節點) - 頂點 1 設於正上方 (pi/2)
+    angles_chord = np.pi / 2 - np.linspace(
+        0, 2 * np.pi, 2 * self.n, endpoint=False
+    )
+    self.chord_pts = {
+        i: (0.85 * np.cos(a), 0.85 * np.sin(a))
+        for i, a in enumerate(angles_chord)
+    }
 
-    # 計算 NCP 圖的基礎位置 (n 個節點) - 確保頂點 1 永遠在正上方 (pi/2)
+    # 計算 NCP 圖的基礎位置 (n 個節點) - 頂點 1 設於正上方 (pi/2)
     angles_ncp = np.pi / 2 - np.linspace(
         0, 2 * np.pi, self.n, endpoint=False
     )
@@ -49,13 +48,13 @@ class CtoNCP:
     # 建立大型畫布
     self.fig = plt.figure(figsize=(21, 8.5))
 
-    # 劃分 2x2 網格 (調整邊界以利呈現)
+    # 劃分 2x2 網格
     gs = self.fig.add_gridspec(
         2, 2, wspace=0.15, hspace=0.35, bottom=0.06, top=0.88
     )
-    self.ax_linear_static = self.fig.add_subplot(gs[0, 0])
+    self.ax_chord_static = self.fig.add_subplot(gs[0, 0])
     self.ax_ncp_static = self.fig.add_subplot(gs[0, 1])
-    self.ax_linear_dynamic = self.fig.add_subplot(gs[1, 0])
+    self.ax_chord_dynamic = self.fig.add_subplot(gs[1, 0])
     self.ax_ncp_dynamic = self.fig.add_subplot(gs[1, 1])
 
     self._prepare_data_and_static()
@@ -81,6 +80,7 @@ class CtoNCP:
 
     self.final_groups = []
     self.pair_to_group_color = {}
+    self.vertex_to_color = {}
     self.linear_pair_labels = {}
     stack = []
     temp_stack_for_pairs = []
@@ -127,31 +127,56 @@ class CtoNCP:
       self.group_colors[frozenset(fg['nodes'])] = color
       for p in fg['pairs']:
         self.pair_to_group_color[p['linear_pair']] = color
+        self.vertex_to_color[p['linear_pair'][0]] = color
+        self.vertex_to_color[p['linear_pair'][1]] = color
 
-    # --- 繪製左上：直線拉直視圖 (靜態參考) ---
-    self.ax_linear_static.clear()
-    self.ax_linear_static.set_title(
-        '1. Non-crossing Arc Diagram',
+    # --- 繪製左上：圓周不相交弦 (靜態參考) ---
+    self.ax_chord_static.clear()
+    self.ax_chord_static.set_aspect('equal')
+    self.ax_chord_static.set_axis_off()
+    self.ax_chord_static.set_xlim(-1.1, 1.1)
+    self.ax_chord_static.set_ylim(-1.1, 1.1)
+    self.ax_chord_static.set_title(
+        f'1. Non-crossing Chord Diagram ({2 * self.n} vertices)',
         fontsize=12,
         fontweight='bold',
         pad=12,
     )
-    self.ax_linear_static.plot(
-        [-0.5, 2 * self.n - 0.5], [0, 0], color='#ddd', lw=1.5, zorder=1
+
+    # 補上：圓周線條 (Circle boundary)
+    self.ax_chord_static.add_patch(
+        patches.Circle(
+            (0, 0),
+            radius=0.85,
+            fill=False,
+            color='#bdc3c7',
+            lw=1.5,
+            linestyle='--',
+            alpha=0.6,
+            zorder=1,
+        )
     )
-    self.ax_linear_static.scatter(
-        self.linear_x, self.linear_y, color='#7f8c8d', s=40, zorder=3
-    )
+
     for i in range(2 * self.n):
-      self.ax_linear_static.text(
-          self.linear_x[i],
-          -0.3,
+      p = self.chord_pts[i]
+      self.ax_chord_static.text(
+          p[0] * 1.22,
+          p[1] * 1.22,
           str(i + 1),
           ha='center',
-          va='top',
+          va='center',
           color='#34495e',
           fontweight='bold',
           fontsize=9,
+      )
+      self.ax_chord_static.add_patch(
+          patches.Circle(
+              p,
+              radius=0.03,
+              facecolor='#7f8c8d',
+              edgecolor='#7f8c8d',
+              zorder=4,
+          )
       )
 
     orig_stack = []
@@ -165,43 +190,32 @@ class CtoNCP:
       elif orig_stack:
         start_node_id = orig_stack.pop()
         start_x = temp_orig_indices.pop()
-        center_x = (self.linear_x[start_x] + self.linear_x[i]) / 2
-        radius = (self.linear_x[i] - self.linear_x[start_x]) / 2
-        theta = np.linspace(0, np.pi, 100)
+        p1, p2 = self.chord_pts[start_x], self.chord_pts[i]
 
-        self.ax_linear_static.plot(
-            center_x + radius * np.cos(theta),
-            radius * np.sin(theta),
+        self.ax_chord_static.plot(
+            [p1[0], p2[0]],
+            [p1[1], p2[1]],
             color='#7f8c8d',
             lw=2,
             alpha=0.7,
             zorder=2,
         )
-        self.ax_linear_static.scatter(
-            [self.linear_x[start_x], self.linear_x[i]],
-            [0, 0],
-            color='#7f8c8d',
-            s=40,
-            zorder=5,
-        )
 
         lbl = self.linear_pair_labels.get((start_x, i), start_node_id)
-        self.ax_linear_static.text(
-            center_x,
-            radius + 0.12,
+        mid_x, mid_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+        self.ax_chord_static.text(
+            mid_x,
+            mid_y,
             str(lbl),
             ha='center',
-            va='bottom',
+            va='center',
             color='#e74c3c',
-            fontsize=9,
+            fontsize=8,
             fontweight='bold',
+            bbox=dict(
+                boxstyle='circle,pad=0.15', fc='white', ec='none', alpha=0.7
+            ),
         )
-
-    max_h = (2 * self.n - 1) / 2
-    self.ax_linear_static.axis('off')
-    self.ax_linear_static.set_xlim(-0.7, 2 * self.n - 0.3)
-    self.ax_linear_static.set_ylim(-0.8, max(max_h + 0.5, 2.0))
-    self.ax_linear_static.set_aspect('equal')
 
     # --- 繪製右上：NCP 靜態圖 ---
     self.ax_ncp_static.clear()
@@ -210,7 +224,7 @@ class CtoNCP:
     self.ax_ncp_static.set_xlim(-1.1, 1.1)
     self.ax_ncp_static.set_ylim(-1.1, 1.1)
     self.ax_ncp_static.set_title(
-        f'2. Noncrossing Partition {self.n} vertices',
+        f'2. Non-crossing Partition ({self.n} vertices)',
         fontsize=12,
         fontweight='bold',
         pad=12,
@@ -258,31 +272,67 @@ class CtoNCP:
     current_view = self.word[: self.anim_step]
 
     # -------------------------------------------------------------
-    # 左下：直線拉直視圖 (動態進度)
+    # 左下：圓周不相交弦 (動態進度與頂點上色)
     # -------------------------------------------------------------
-    self.ax_linear_dynamic.clear()
-    self.ax_linear_dynamic.set_title(
-        f'3. Non-crossing Arc Diagram (Step: {self.anim_step})',
+    self.ax_chord_dynamic.clear()
+    self.ax_chord_dynamic.set_aspect('equal')
+    self.ax_chord_dynamic.set_axis_off()
+    self.ax_chord_dynamic.set_xlim(-1.1, 1.1)
+    self.ax_chord_dynamic.set_ylim(-1.1, 1.1)
+    self.ax_chord_dynamic.set_title(
+        f'3. Dynamic Non-crossing Chord Diagram (Step: {self.anim_step})',
         fontsize=12,
         fontweight='bold',
         pad=12,
     )
-    self.ax_linear_dynamic.plot(
-        [-0.5, 2 * self.n - 0.5], [0, 0], color='#ddd', lw=1.5, zorder=1
-    )
-    self.ax_linear_dynamic.scatter(
-        self.linear_x, self.linear_y, color='#e0e0e0', s=40, zorder=3
+
+    # 補上：圓周線條 (Circle boundary)
+    self.ax_chord_dynamic.add_patch(
+        patches.Circle(
+            (0, 0),
+            radius=0.85,
+            fill=False,
+            color='#bdc3c7',
+            lw=1.5,
+            linestyle='--',
+            alpha=0.6,
+            zorder=1,
+        )
     )
 
     for i in range(2 * self.n):
-      color = '#34495e' if i < self.anim_step else '#bdc3c7'
-      self.ax_linear_dynamic.text(
-          self.linear_x[i],
-          -0.3,
+      p = self.chord_pts[i]
+      if i < self.anim_step:
+        v_color = self.vertex_to_color.get(i, '#3498db')
+        self.ax_chord_dynamic.add_patch(
+            patches.Circle(
+                p,
+                radius=0.04,
+                facecolor=v_color,
+                edgecolor=v_color,
+                zorder=5,
+            )
+        )
+        txt_color = '#34495e'
+      else:
+        self.ax_chord_dynamic.add_patch(
+            patches.Circle(
+                p,
+                radius=0.03,
+                facecolor='#e0e0e0',
+                edgecolor='#bdc3c7',
+                zorder=3,
+            )
+        )
+        txt_color = '#bdc3c7'
+
+      self.ax_chord_dynamic.text(
+          p[0] * 1.22,
+          p[1] * 1.22,
           str(i + 1),
           ha='center',
-          va='top',
-          color=color,
+          va='center',
+          color=txt_color,
           fontweight='bold',
           fontsize=9,
       )
@@ -301,47 +351,38 @@ class CtoNCP:
           start_x = temp_stack_indices.pop()
 
           line_color = self.pair_to_group_color.get((start_x, i), '#3498db')
+          p1, p2 = self.chord_pts[start_x], self.chord_pts[i]
 
-          center_x = (self.linear_x[start_x] + self.linear_x[i]) / 2
-          radius = (self.linear_x[i] - self.linear_x[start_x]) / 2
-          theta = np.linspace(0, np.pi, 100)
-
-          self.ax_linear_dynamic.plot(
-              center_x + radius * np.cos(theta),
-              radius * np.sin(theta),
+          self.ax_chord_dynamic.plot(
+              [p1[0], p2[0]],
+              [p1[1], p2[1]],
               color=line_color,
               lw=2.5,
               alpha=0.9,
               zorder=2,
           )
-          self.ax_linear_dynamic.scatter(
-              [self.linear_x[start_x], self.linear_x[i]],
-              [0, 0],
-              color=line_color,
-              s=50,
-              zorder=5,
-          )
 
           lbl = self.linear_pair_labels.get((start_x, i), start_node_id)
-          self.ax_linear_dynamic.text(
-              center_x,
-              radius + 0.12,
+          mid_x, mid_y = (p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2
+          self.ax_chord_dynamic.text(
+              mid_x,
+              mid_y,
               str(lbl),
               ha='center',
-              va='bottom',
+              va='center',
               color='#e74c3c',
-              fontsize=9,
+              fontsize=8,
               fontweight='bold',
+              bbox=dict(
+                  boxstyle='circle,pad=0.15',
+                  fc='white',
+                  ec='none',
+                  alpha=0.8,
+              ),
           )
 
-    max_h = (2 * self.n - 1) / 2
-    self.ax_linear_dynamic.axis('off')
-    self.ax_linear_dynamic.set_xlim(-0.7, 2 * self.n - 0.3)
-    self.ax_linear_dynamic.set_ylim(-0.8, max(max_h + 0.5, 2.0))
-    self.ax_linear_dynamic.set_aspect('equal')
-
     # -------------------------------------------------------------
-    # 右下：NCP 動態圖
+    # 右下：NCP 動態圖 (頂點同步帶有顏色)
     # -------------------------------------------------------------
     self.ax_ncp_dynamic.clear()
     self.ax_ncp_dynamic.set_aspect('equal')
@@ -349,7 +390,7 @@ class CtoNCP:
     self.ax_ncp_dynamic.set_xlim(-1.1, 1.1)
     self.ax_ncp_dynamic.set_ylim(-1.1, 1.1)
     self.ax_ncp_dynamic.set_title(
-        '4. Dynamic Non-crossing Partition',
+        f'4. Dynamic Non-crossing Partition (Step: {self.anim_step})',
         fontsize=12,
         fontweight='bold',
         pad=12,
@@ -412,6 +453,13 @@ class CtoNCP:
               )
           )
 
+    # 計算當前動態步驟中，NCP 頂點所對應的顏色
+    active_ncp_colors = {}
+    for i in range(min(self.anim_step, 2 * self.n)):
+      node = len([c for c in self.word[: i + 1] if c == '('])
+      v_color = self.vertex_to_color.get(i, '#3498db')
+      active_ncp_colors[node] = v_color
+
     for node in range(1, self.n + 1):
       if node not in has_polygon_shaded:
         node_closed = False
@@ -436,11 +484,23 @@ class CtoNCP:
               )
           )
 
-      self.ax_ncp_dynamic.add_patch(
-          patches.Circle(
-              self.ncp_pts[node], radius=0.03, facecolor='#bdc3c7', zorder=3
-          )
-      )
+      # 若該 NCP 頂點已在動態步驟中被活化，則上對應顏色；否則保持預設淡灰色
+      if node in active_ncp_colors:
+        self.ax_ncp_dynamic.add_patch(
+            patches.Circle(
+                self.ncp_pts[node],
+                radius=0.05,
+                facecolor=active_ncp_colors[node],
+                edgecolor=active_ncp_colors[node],
+                zorder=5,
+            )
+        )
+      else:
+        self.ax_ncp_dynamic.add_patch(
+            patches.Circle(
+                self.ncp_pts[node], radius=0.03, facecolor='#bdc3c7', zorder=3
+            )
+        )
 
     self.fig.suptitle(
         'Catalan Bijection Mapping  | '
@@ -450,5 +510,3 @@ class CtoNCP:
         y=0.98,
     )
     self.fig.canvas.draw_idle()
-
-

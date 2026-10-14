@@ -1,30 +1,21 @@
-import logging
 import math
-import warnings
 import matplotlib.colors as mcolors
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
 
-# 基礎警報封鎖
-warnings.filterwarnings(
-    'ignore', category=UserWarning, module='matplotlib'
-)
-warnings.filterwarnings('ignore', category=DeprecationWarning)
-logging.getLogger('matplotlib').setLevel(logging.ERROR)
-
-
 
 class AtNCP:
 
   def __init__(self, n, page_index=0, step_index=None):
-    plt.close('all')  # 清除 Matplotlib 快取，防止 Streamlit 記憶體溢位
+    # 清除歷史畫布快取，防止 Streamlit 雲端伺服器記憶體洩漏
+    plt.close('all')
 
     self.n = int(n)
     self.words = self.generate_all_dyck_words(self.n)
     self.total_count = len(self.words)
 
-    # 接收 Streamlit 傳入的頁碼與步驟索引
+    # 接收 Streamlit 控制的頁碼與步驟索引
     self.current_idx = max(0, min(page_index, self.total_count - 1))
     self.max_steps = 2 * self.n
     self.anim_step = (
@@ -46,12 +37,12 @@ class AtNCP:
         for i, a in enumerate(angles_ncp)
     }
 
-    # 建立大型畫布
-    self.fig = plt.figure(figsize=(21, 8.5))
+    # 建立適合 Streamlit 網頁顯示的畫布
+    self.fig = plt.figure(figsize=(18, 8.5))
 
-    # 劃分 2x2 網格 (調整邊界以利呈現)
+    # 劃分 2x2 網格並優化邊界
     gs = self.fig.add_gridspec(
-        2, 2, wspace=0.15, hspace=0.35, bottom=0.06, top=0.88
+        2, 2, wspace=0.15, hspace=0.35, bottom=0.06, top=0.90
     )
     self.ax_linear_static = self.fig.add_subplot(gs[0, 0])
     self.ax_ncp_static = self.fig.add_subplot(gs[0, 1])
@@ -81,6 +72,7 @@ class AtNCP:
 
     self.final_groups = []
     self.pair_to_group_color = {}
+    self.vertex_to_color = {}
     self.linear_pair_labels = {}
     stack = []
     temp_stack_for_pairs = []
@@ -97,9 +89,7 @@ class AtNCP:
         start_info = stack.pop()
         start_x = temp_stack_for_pairs.pop()
 
-        actual_closing_node = len(
-            [c for c in self.word[: i + 1] if c == '(']
-        )
+        actual_closing_node = len([c for c in self.word[: i + 1] if c == '('])
         pair_nodes = {start_info['node'], actual_closing_node}
         pair = {
             'nodes': pair_nodes,
@@ -117,7 +107,9 @@ class AtNCP:
             found = True
             break
         if not found:
-          self.final_groups.append({'nodes': pair['nodes'], 'pairs': [pair]})
+          self.final_groups.append(
+              {'nodes': pair['nodes'], 'pairs': [pair]}
+          )
 
     self.group_colors = {}
     for idx, fg in enumerate(self.final_groups):
@@ -127,14 +119,13 @@ class AtNCP:
       self.group_colors[frozenset(fg['nodes'])] = color
       for p in fg['pairs']:
         self.pair_to_group_color[p['linear_pair']] = color
+        self.vertex_to_color[p['linear_pair'][0]] = color
+        self.vertex_to_color[p['linear_pair'][1]] = color
 
     # --- 繪製左上：直線拉直視圖 (靜態參考) ---
     self.ax_linear_static.clear()
     self.ax_linear_static.set_title(
-        '1. Non-crossing Arc Diagram',
-        fontsize=12,
-        fontweight='bold',
-        pad=12,
+        '1. Non-crossing Arc Diagram', fontsize=11, fontweight='bold', pad=10
     )
     self.ax_linear_static.plot(
         [-0.5, 2 * self.n - 0.5], [0, 0], color='#ddd', lw=1.5, zorder=1
@@ -185,18 +176,6 @@ class AtNCP:
             zorder=5,
         )
 
-        lbl = self.linear_pair_labels.get((start_x, i), start_node_id)
-        self.ax_linear_static.text(
-            center_x,
-            radius + 0.12,
-            str(lbl),
-            ha='center',
-            va='bottom',
-            color='#e74c3c',
-            fontsize=9,
-            fontweight='bold',
-        )
-
     max_h = (2 * self.n - 1) / 2
     self.ax_linear_static.axis('off')
     self.ax_linear_static.set_xlim(-0.7, 2 * self.n - 0.3)
@@ -210,10 +189,10 @@ class AtNCP:
     self.ax_ncp_static.set_xlim(-1.1, 1.1)
     self.ax_ncp_static.set_ylim(-1.1, 1.1)
     self.ax_ncp_static.set_title(
-        f'2. Noncrossing Partition {self.n} vertices',
-        fontsize=12,
+        f'2. Non-crossing Partition ({self.n} vertices)',
+        fontsize=11,
         fontweight='bold',
-        pad=12,
+        pad=10,
     )
 
     for j in range(1, self.n + 1):
@@ -258,31 +237,38 @@ class AtNCP:
     current_view = self.word[: self.anim_step]
 
     # -------------------------------------------------------------
-    # 左下：直線拉直視圖 (動態進度)
+    # 左下：直線拉直視圖 (動態進度，頂點同步上色)
     # -------------------------------------------------------------
     self.ax_linear_dynamic.clear()
     self.ax_linear_dynamic.set_title(
         f'3. Dynamic Non-crossing Arc Diagram (Step: {self.anim_step})',
-        fontsize=12,
+        fontsize=11,
         fontweight='bold',
-        pad=12,
+        pad=10,
     )
     self.ax_linear_dynamic.plot(
         [-0.5, 2 * self.n - 0.5], [0, 0], color='#ddd', lw=1.5, zorder=1
     )
-    self.ax_linear_dynamic.scatter(
-        self.linear_x, self.linear_y, color='#e0e0e0', s=40, zorder=3
-    )
 
     for i in range(2 * self.n):
-      color = '#34495e' if i < self.anim_step else '#bdc3c7'
+      if i < self.anim_step:
+        v_color = self.vertex_to_color.get(i, '#3498db')
+        self.ax_linear_dynamic.scatter(
+            self.linear_x[i], self.linear_y[i], color=v_color, s=50, zorder=3
+        )
+        txt_color = '#34495e'
+      else:
+        self.ax_linear_dynamic.scatter(
+            self.linear_x[i], self.linear_y[i], color='#e0e0e0', s=40, zorder=3
+        )
+        txt_color = '#bdc3c7'
       self.ax_linear_dynamic.text(
           self.linear_x[i],
           -0.3,
           str(i + 1),
           ha='center',
           va='top',
-          color=color,
+          color=txt_color,
           fontweight='bold',
           fontsize=9,
       )
@@ -314,13 +300,6 @@ class AtNCP:
               alpha=0.9,
               zorder=2,
           )
-          self.ax_linear_dynamic.scatter(
-              [self.linear_x[start_x], self.linear_x[i]],
-              [0, 0],
-              color=line_color,
-              s=50,
-              zorder=5,
-          )
 
           lbl = self.linear_pair_labels.get((start_x, i), start_node_id)
           self.ax_linear_dynamic.text(
@@ -341,7 +320,7 @@ class AtNCP:
     self.ax_linear_dynamic.set_aspect('equal')
 
     # -------------------------------------------------------------
-    # 右下：NCP 動態圖
+    # 右下：NCP 動態圖 (頂點同步帶有顏色)
     # -------------------------------------------------------------
     self.ax_ncp_dynamic.clear()
     self.ax_ncp_dynamic.set_aspect('equal')
@@ -350,9 +329,9 @@ class AtNCP:
     self.ax_ncp_dynamic.set_ylim(-1.1, 1.1)
     self.ax_ncp_dynamic.set_title(
         f'4. Dynamic Non-crossing Partition (Step: {self.anim_step})',
-        fontsize=12,
+        fontsize=11,
         fontweight='bold',
-        pad=12,
+        pad=10,
     )
 
     for j in range(1, self.n + 1):
@@ -407,10 +386,15 @@ class AtNCP:
           )
         else:
           self.ax_ncp_dynamic.add_patch(
-              patches.Polygon(
-                  shrink_pts, closed=True, facecolor=color, alpha=0.25
-              )
+              patches.Polygon(shrink_pts, closed=True, facecolor=color, alpha=0.25)
           )
+
+    # 計算當前動態步驟中，NCP 頂點所對應的顏色
+    active_ncp_colors = {}
+    for i in range(min(self.anim_step, 2 * self.n)):
+      node = len([c for c in self.word[: i + 1] if c == '('])
+      v_color = self.vertex_to_color.get(i, '#3498db')
+      active_ncp_colors[node] = v_color
 
     for node in range(1, self.n + 1):
       if node not in has_polygon_shaded:
@@ -436,18 +420,29 @@ class AtNCP:
               )
           )
 
-      self.ax_ncp_dynamic.add_patch(
-          patches.Circle(
-              self.ncp_pts[node], radius=0.03, facecolor='#bdc3c7', zorder=3
-          )
-      )
+      # 若該 NCP 頂點已在動態步驟中被活化，則上對應顏色；否則保持預設淡灰色
+      if node in active_ncp_colors:
+        self.ax_ncp_dynamic.add_patch(
+            patches.Circle(
+                self.ncp_pts[node],
+                radius=0.05,
+                facecolor=active_ncp_colors[node],
+                edgecolor=active_ncp_colors[node],
+                zorder=5,
+            )
+        )
+      else:
+        self.ax_ncp_dynamic.add_patch(
+            patches.Circle(
+                self.ncp_pts[node], radius=0.03, facecolor='#bdc3c7', zorder=3
+            )
+        )
 
     self.fig.suptitle(
-        'Catalan Bijection Mapping  | '
-        f' Page #{self.current_idx+1}/{self.total_count}\n',
-        fontsize=15,
+        f'Catalan Bijection Mapping | Page'
+        f' #{self.current_idx+1}/{self.total_count}',
+        fontsize=12,
         fontweight='bold',
         y=0.98,
     )
     self.fig.canvas.draw_idle()
-
